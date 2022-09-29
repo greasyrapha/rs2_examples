@@ -3,47 +3,58 @@
 import roslib
 import rospy
 from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Point, Quaternion, Vector3, PoseStamped
 
 import numpy as np
 import pyrealsense2 as rs
 
-def setImu(x, y, z, roll, pitch, yaw):
-    imu = Imu()
-    imu.header.frame_id = "/imu_link"
-    imu.angular_velocity.x = -yaw
-    imu.angular_velocity.y = roll
-    imu.angular_velocity.z = -pitch
-    imu.linear_acceleration.x = -z
-    imu.linear_acceleration.y = x
-    imu.linear_acceleration.z = -y
-    pubimu.publish(self.imu)
+class Camera_Imu:
+    def __init__(self):
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f) #Enable accelerometer 62.5, 250(Hz)
+        self.config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f) #Enable gyroscope 200, 400(Hz)
+        self.profile = self.pipeline.start(self.config)
 
-def imu_1():
-    frames = pipeline.wait_for_frames()
+        self.subpose = rospy.Subscriber('/integrated_to_init', Odometry, self.poseCallback, queue_size=1)
+        self.pubimu = rospy.Publisher("/imu", Imu, queue_size=1)
 
-    accel_frame = frames[0].as_motion_frame().get_motion_data()
-    gyro_frame = frames[1].as_motion_frame().get_motion_data()
+        try:
+            while True:
+                self.imu_1()
+        finally:
+            self.pipeline.stop()
 
-    accel = np.asarray([accel_frame.x, accel_frame.y, accel_frame.z])
-    gyro = np.asarray([gyro_frame.x, gyro_frame.y, gyro_frame.z])
+    def poseCallback(self, slamout):
+        self.orientation = [slamout.pose.pose.orientation.z, slamout.pose.pose.orientation.x, slamout.pose.pose.orientation.y, slamout.pose.pose.orientation.w]
+        self.imu = Imu()
+        self.imu.angular_velocity.x = self.gyro[0]
+        self.imu.angular_velocity.y = self.gyro[1]
+        self.imu.angular_velocity.z = self.gyro[2]
+        self.imu.linear_acceleration.x = self.accel[0]
+        self.imu.linear_acceleration.y = self.accel[1]
+        self.imu.linear_acceleration.z = self.accel[2]
+        self.imu.orientation.x = self.orientation[0]
+        self.imu.orientation.y = self.orientation[1]
+        self.imu.orientation.z = self.orientation[2]
+        self.imu.orientation.w = self.orientation[3]
+        self.pubimu.publish(self.imu)
 
-    #print("accel : ", accel)
-    #print("gyro : ", gyro)
+    def imu_1(self):
+        frames = self.pipeline.wait_for_frames()
 
-    setImu(accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2])
+        accel_frame = frames[0].as_motion_frame().get_motion_data()
+        gyro_frame = frames[1].as_motion_frame().get_motion_data()
 
+        self.accel = np.asarray([accel_frame.x, accel_frame.y, accel_frame.z])
+        self.gyro = np.asarray([gyro_frame.x, gyro_frame.y, gyro_frame.z])
+
+        
 def main():
-    print("IMU Node is up!")
-    while true:
-        imu_1()
+    camera_imu = Camera_Imu()
 
 if __name__ == "__main__": 
     rospy.init_node('imu')
-    pipeline = rs.pipeline()
-    config = rs.config()
-    config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f) #Enable accelerometer 62.5, 250(Hz)
-    config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f) #Enable gyroscope 200, 400(Hz)
-    profile = self.pipeline.start(self.config)
-
-    pubimu = rospy.Publisher("/imu/data", Imu, queue_size=1)
+    print("IMU Node is Up!")
     main()
