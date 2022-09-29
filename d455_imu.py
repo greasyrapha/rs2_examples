@@ -15,7 +15,7 @@ class Camera_Imu:
         self.config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f) #Enable gyroscope 200, 400(Hz)
         self.profile = self.pipeline.start(self.config)
 
-        self.pubimu = rospy.Publisher("/imu", Imu, queue_size=1)
+        self.pubimu = rospy.Publisher("/imu/data", Imu, queue_size=1)
 
         try:
             while True:
@@ -25,12 +25,13 @@ class Camera_Imu:
 
     def setImu(self, x, y, z, roll, pitch, yaw):
         self.imu = Imu()
-        self.imu.angular_velocity.x = roll
-        self.imu.angular_velocity.y = pitch
-        self.imu.angular_velocity.z = yaw
-        self.imu.linear_acceleration.x = x
-        self.imu.linear_acceleration.y = y
-        self.imu.linear_acceleration.z = z
+        self.imu.header.frame_id = "/imu_link"
+        self.imu.angular_velocity.x = -yaw
+        self.imu.angular_velocity.y = roll
+        self.imu.angular_velocity.z = -pitch
+        self.imu.linear_acceleration.x = -z
+        self.imu.linear_acceleration.y = x
+        self.imu.linear_acceleration.z = -y
 
     def imu_1(self):
         frames = self.pipeline.wait_for_frames()
@@ -41,13 +42,14 @@ class Camera_Imu:
         accel = np.asarray([accel_frame.x, accel_frame.y, accel_frame.z])
         gyro = np.asarray([gyro_frame.x, gyro_frame.y, gyro_frame.z])
 
-        print("accel : ", accel)
-        print("gyro : ", gyro)
+        #print("accel : ", accel)
+        #print("gyro : ", gyro)
 
         self.setImu(accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2])
         self.pubimu.publish(self.imu)
 
 def main():
+    print("IMU Node is up!")
     camera_imu = Camera_Imu()
 
 if __name__ == "__main__": 
